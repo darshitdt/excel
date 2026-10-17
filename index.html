@@ -4,16 +4,162 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Borewell Telemetry Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  
   <!-- SheetJS Library for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --primary-color: #107c41; /* Original Excel Green */
+      --primary-hover: #0b582e;
+      --bg-color: #f3f2f1;
+      --card-bg: #ffffff;
+      --text-color: #323130;
+      --border-color: #e1dfdd;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h2 {
+      color: var(--primary-color);
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      max-width: 400px;
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .checkbox-group label {
+      margin-bottom: 0;
+      font-weight: normal;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background-color: #8a8886;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background-color: #605e5c;
+    }
+
+    .btn-success {
+      background-color: #0078d4;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background-color: #106ebe;
+    }
+
+    #statusMsg {
+      font-weight: 600;
+      color: var(--primary-color);
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background-color: #f8f9fa;
+      color: #323130;
+      font-weight: 600;
+    }
+
+    tr:hover {
+      background-color: #f3f1f0;
+    }
+  </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>Borewell Main Page Dashboard</h2>
+    <h2>Borewell Telemetry Dashboard</h2>
 
-    <!-- Login Controls Card -->
+    <!-- Controls Card -->
     <div class="card">
       <div class="form-group">
         <label for="apiUser">Username:</label>
@@ -36,14 +182,11 @@
         <button class="btn btn-success" onclick="exportToExcel()">📥 Download Excel</button>
       </div>
       
-      <p id="statusMsg" style="font-weight: bold; color: #107c41; margin-top: 10px;"></p>
+      <p id="statusMsg"></p>
     </div>
 
-    <!-- Hidden iframe used for receiving cross-origin form submissions -->
-    <iframe id="responseFrame" name="responseFrame" style="display:none;"></iframe>
-
-    <!-- Telemetry Data Table Card -->
-    <div class="card">
+    <!-- Data Table Card -->
+    <div class="card" style="overflow-x: auto;">
       <table id="excelTable">
         <thead>
           <tr>
