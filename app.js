@@ -1,13 +1,6 @@
 const BASE_URL = "https://eversense.forbesmarshall.com";
 
-// List of public CORS proxies to try sequentially
-const PROXIES = [
-  "https://corsproxy.io/?",
-  "https://api.allorigins.win/raw?url=",
-  "https://thingproxy.freeboard.io/fetch/"
-];
-
-// On page load, populate saved credentials if available
+// On page load, auto-fill saved credentials if available
 window.addEventListener("DOMContentLoaded", () => {
   const savedUser = localStorage.getItem("bw_api_user");
   const savedPass = localStorage.getItem("bw_api_pass");
@@ -19,24 +12,13 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-/**
- * Displays status message on screen
- */
 function showStatus(msg) {
   let statusDiv = document.getElementById("statusMsg");
-  if (!statusDiv) {
-    statusDiv = document.createElement("p");
-    statusDiv.id = "statusMsg";
-    statusDiv.style.fontWeight = "bold";
-    statusDiv.style.color = "#107c41";
-    document.querySelector(".card").insertBefore(statusDiv, document.getElementById("excelTable"));
+  if (statusDiv) {
+    statusDiv.innerText = msg;
   }
-  statusDiv.innerText = msg;
 }
 
-/**
- * Clears saved login info from browser storage and resets fields
- */
 function clearCredentials() {
   localStorage.removeItem("bw_api_user");
   localStorage.removeItem("bw_api_pass");
@@ -47,39 +29,7 @@ function clearCredentials() {
 }
 
 /**
- * Helper function to send POST/GET requests across proxies
- */
-async function fetchWithProxy(endpoint, options = {}) {
-  const targetUrl = BASE_URL + endpoint;
-  let lastError = null;
-
-  for (const proxy of PROXIES) {
-    try {
-      const fullUrl = proxy + encodeURIComponent(targetUrl);
-      const response = await fetch(fullUrl, options);
-      
-      if (response.status === 403) {
-        console.warn(`Proxy ${proxy} returned 403, trying next proxy...`);
-        continue;
-      }
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server status ${response.status}: ${errorText}`);
-      }
-
-      return await response.json();
-    } catch (err) {
-      console.error(`Failed with proxy ${proxy}:`, err.message);
-      lastError = err;
-    }
-  }
-
-  throw new Error(lastError ? lastError.message : "All proxy connections failed.");
-}
-
-/**
- * Main execution function
+ * Executes login via standard HTML Form submission targeted at the hidden iframe
  */
 async function runMacroLogic() {
   const userInput = document.getElementById("apiUser").value.trim();
@@ -99,45 +49,102 @@ async function runMacroLogic() {
     localStorage.removeItem("bw_api_pass");
   }
 
+  showStatus("Authenticating via HTML Form submission...");
+
+  // 1. Remove any old dynamic form if present
+  const oldForm = document.getElementById("loginDynamicForm");
+  if (oldForm) oldForm.remove();
+
+  // 2. Create a temporary HTML form targeting the hidden iframe
+  const form = document.createElement("form");
+  form.id = "loginDynamicForm";
+  form.method = "POST";
+  form.action = BASE_URL + "/api/auth/login";
+  form.target = "responseFrame"; // Route response to hidden iframe
+  form.style.display = "none";
+
+  // 3. Add hidden payload field containing credentials
+  const usernameInput = document.createElement("input");
+  usernameInput.type = "hidden";
+  usernameInput.name = "username";
+  usernameInput.value = userInput;
+
+  const passwordInput = document.createElement("input");
+  passwordInput.type = "hidden";
+  passwordInput.name = "password";
+  passwordInput.value = passInput;
+
+  form.appendChild(usernameInput);
+  form.appendChild(passwordInput);
+  document.body.appendChild(form);
+
+  // 4. Attach listener to the iframe to read the token when the form posts
+  const iframe = document.getElementById("responseFrame");
+  
+  const onIframeLoad = async () => {
+    iframe.removeEventListener("load", onIframeLoad);
+    
+    try {
+      showStatus("Form submitted! Extracting authentication response...");
+
+      // Attempt to read the returned JSON from the frame body
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      const responseText = iframeDoc.body.innerText || iframeDoc.body.textContent;
+
+      if (!responseText) {
+        throw new Error("Empty response received from Forbes Marshall server.");
+      }
+
+      const loginData = JSON.parse(responseText);
+      const token = loginData.token;
+
+      if (!token) {
+        throw new Error("Invalid username or password.");
+      }
+
+      showStatus("Login successful! Fetching live telemetry data...");
+      await fetchTelemetryData(token);
+
+    } catch (err) {
+      console.error(err);
+      showStatus("Form Submit Error: " + err.message);
+      alert("Authentication failed: " + err.message);
+    } finally {
+      form.remove();
+    }
+  };
+
+  iframe.addEventListener("load", onIframeLoad);
+
+  // 5. Submit the form
+  form.submit();
+}
+
+/**
+ * Fetches telemetry dataset using the acquired JWT Token
+ */
+async function fetchTelemetryData(token) {
+  const dataPayload = {
+    entityFields: [
+      { type: "ENTITY_FIELD", key: "name" },
+      { type: "ENTITY_FIELD", key: "label" }
+    ],
+    latestValues: [
+      { type: "TIME_SERIES", key: "Hourly Total" },
+      { type: "TIME_SERIES", key: "Hourly Flow" },
+      { type: "TIME_SERIES", key: "Daily Total" },
+      { type: "TIME_SERIES", key: "NOC Limit (m3/year)" },
+      { type: "TIME_SERIES", key: "NOC Limit (m3/day)" },
+      { type: "TIME_SERIES", key: "Flow" },
+      { type: "TIME_SERIES", key: "Flow Rate" },
+      { type: "TIME_SERIES", key: "Totalizer" }
+    ],
+    entityFilter: { type: "entityType", entityType: "DEVICE" },
+    pageLink: { pageSize: 100, page: 0 }
+  };
+
   try {
-    showStatus("Authenticating with Forbes Marshall Server...");
-
-    // 1. Login
-    const loginData = await fetchWithProxy("/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({ username: userInput, password: passInput })
-    });
-
-    const token = loginData.token;
-    if (!token) throw new Error("Auth token missing from server response.");
-
-    showStatus("Fetching latest telemetry data...");
-
-    // 2. Telemetry Query
-    const dataPayload = {
-      entityFields: [
-        { type: "ENTITY_FIELD", key: "name" },
-        { type: "ENTITY_FIELD", key: "label" }
-      ],
-      latestValues: [
-        { type: "TIME_SERIES", key: "Hourly Total" },
-        { type: "TIME_SERIES", key: "Hourly Flow" },
-        { type: "TIME_SERIES", key: "Daily Total" },
-        { type: "TIME_SERIES", key: "NOC Limit (m3/year)" },
-        { type: "TIME_SERIES", key: "NOC Limit (m3/day)" },
-        { type: "TIME_SERIES", key: "Flow" },
-        { type: "TIME_SERIES", key: "Flow Rate" },
-        { type: "TIME_SERIES", key: "Totalizer" }
-      ],
-      entityFilter: { type: "entityType", entityType: "DEVICE" },
-      pageLink: { pageSize: 100, page: 0 }
-    };
-
-    const responseData = await fetchWithProxy("/api/entitiesQuery/find", {
+    const response = await fetch(BASE_URL + "/api/entitiesQuery/find", {
       method: "POST",
       headers: {
         "Content-Type": "application/json;charset=UTF-8",
@@ -147,17 +154,21 @@ async function runMacroLogic() {
       body: JSON.stringify(dataPayload)
     });
 
+    if (!response.ok) {
+      throw new Error(`Telemetry query failed with status: ${response.status}`);
+    }
+
+    const responseData = await response.json();
     renderMainPageTable(responseData);
     showStatus("All Borewell data successfully updated!");
   } catch (err) {
     console.error(err);
-    alert("Execution Error: " + err.message);
-    showStatus("Error loading data. Check console (F12) for details.");
+    showStatus("Telemetry Fetch Error: " + err.message);
   }
 }
 
 /**
- * Renders parsed JSON data into the HTML Table
+ * Renders telemetry JSON data into the HTML Table
  */
 function renderMainPageTable(jsonData) {
   const tableBody = document.getElementById("tableBody");
@@ -215,7 +226,7 @@ function renderMainPageTable(jsonData) {
     }
   });
 
-  // Summary Row
+  // Totals Summary Row
   const totalRow = document.createElement("tr");
   totalRow.style.fontWeight = "bold";
   totalRow.style.backgroundColor = "#e2eaf3";
