@@ -3,61 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Borewell Telemetry Web App</title>
+  <title>Borewell Telemetry Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- SheetJS Library for Excel Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f6f9; }
-    .card { background: white; padding: 25px; border-radius: 8px; max-width: 950px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    h1 { color: #107c41; margin-top: 0; }
-    .login-box { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background-color: #eef2f5; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
-    .login-box input[type="text"], .login-box input[type="password"] { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: 200px; }
-    .remember-me { display: flex; align-items: center; gap: 5px; font-size: 14px; cursor: pointer; }
-    .btn { background-color: #107c41; color: white; padding: 9px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
-    .btn:hover { background-color: #0b582e; }
-    .btn-clear { background-color: #d9534f; }
-    .btn-clear:hover { background-color: #c9302c; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-    th { background-color: #f0f0f0; }
-  </style>
 </head>
 <body>
 
-<div class="card">
-  <h1>Borewell Telemetry Dashboard</h1>
+  <div class="container">
+    <h2>Borewell Main Page Dashboard</h2>
 
-  <div class="login-box">
-    <input type="text" id="apiUser" placeholder="Username" />
-    <input type="password" id="apiPass" placeholder="Password" />
-    <label class="remember-me">
-      <input type="checkbox" id="rememberMe" /> Save for future
-    </label>
-    <button class="btn" onclick="runMacroLogic()">▶ Run Macro</button>
-    <button class="btn btn-clear" onclick="clearCredentials()">🗑 Clear Credentials</button>
-    <button class="btn" onclick="exportToExcel()">📥 Download Excel</button>
+    <!-- Login Controls Card -->
+    <div class="card">
+      <div class="form-group">
+        <label for="apiUser">Username:</label>
+        <input type="text" id="apiUser" placeholder="Enter Forbes Marshall Username">
+      </div>
+
+      <div class="form-group">
+        <label for="apiPass">Password:</label>
+        <input type="password" id="apiPass" placeholder="Enter Forbes Marshall Password">
+      </div>
+
+      <div class="form-group checkbox-group">
+        <input type="checkbox" id="rememberMe">
+        <label for="rememberMe">Save for future</label>
+      </div>
+
+      <div class="button-group">
+        <button class="btn btn-primary" onclick="runMacroLogic()">▶ Run Macro</button>
+        <button class="btn btn-secondary" onclick="clearCredentials()">🗑 Clear Saved Info</button>
+        <button class="btn btn-success" onclick="exportToExcel()">📥 Download Excel</button>
+      </div>
+      
+      <p id="statusMsg" style="font-weight: bold; color: #107c41; margin-top: 10px;"></p>
+    </div>
+
+    <!-- Hidden iframe used for receiving cross-origin form submissions -->
+    <iframe id="responseFrame" name="responseFrame" style="display:none;"></iframe>
+
+    <!-- Telemetry Data Table Card -->
+    <div class="card">
+      <table id="excelTable">
+        <thead>
+          <tr>
+            <th>Site Name</th>
+            <th>Location</th>
+            <th>Hourly Total</th>
+            <th>Daily Total</th>
+            <th>NOC Limit (m3/yr)</th>
+            <th>NOC Limit (m3/day)</th>
+            <th>Flow Rate</th>
+            <th>Totalizer</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr>
+            <td colspan="8" style="text-align:center;">No data loaded yet. Enter credentials and click 'Run Macro'.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <table id="excelTable">
-    <thead>
-      <tr>
-        <th>Borewell Site Name</th>
-        <th>Location</th>
-        <th>Hourly Total (m3)</th>
-        <th>Daily Total (m3)</th>
-        <th>NOC Limit (m3/year)</th>
-        <th>NOC Limit (m3/day)</th>
-        <th>Flow (m3/hr)</th>
-        <th>Totalizer (m3)</th>
-      </tr>
-    </thead>
-    <tbody id="tableBody">
-      <tr>
-        <td colspan="8" style="text-align:center;">Enter credentials and click "Run Macro" to fetch live data.</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
