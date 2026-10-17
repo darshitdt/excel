@@ -1,5 +1,5 @@
 const BASE_URL = "https://eversense.forbesmarshall.com";
-const PROXY_URL = "https://corsproxy.io/?"; 
+const PROXY_URL = "https://api.allorigins.win/raw?url="; 
 
 // On page load, populate saved credentials if available
 window.addEventListener("DOMContentLoaded", () => {
