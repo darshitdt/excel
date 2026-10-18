@@ -14,7 +14,7 @@
       --primary-hover: #0b582e;
       --secondary-color: #005a9e; /* Macro Accent Blue */
       --secondary-hover: #004578;
-      --history-color: #8e24aa; /* Monthly History Purple */
+      --history-color: #8e24aa; /* Monthly Automation Purple */
       --history-hover: #6a1b9a;
       --bg-color: #f3f2f1;
       --card-bg: #ffffff;
@@ -158,6 +158,10 @@
       align-items: center;
       margin-bottom: 10px;
     }
+
+    .summary-row-total { background-color: #dce6f1; font-weight: bold; }
+    .summary-row-maxmin { background-color: #f2f2f2; font-weight: bold; }
+    .summary-row-diff { background-color: #fee6e6; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -185,7 +189,7 @@
       <div class="button-group">
         <button class="btn btn-primary" onclick="runMacroLogic()">▶ Run Main Macro</button>
         <button class="btn btn-macro2" onclick="runSecondMacroLogic()">▶ Run Macro 2</button>
-        <button class="btn btn-history" onclick="runMonthlyHistoryMacro()">📅 Monthly Export (555)</button>
+        <button class="btn btn-history" onclick="generateBorewellReportFinal()">⚡ Generate Complete Monthly Automation</button>
         <button class="btn btn-secondary" onclick="clearCredentials()">🗑 Clear Saved Info</button>
       </div>
       
@@ -242,8 +246,8 @@
       </table>
     </div>
 
-    <!-- Container for Monthly History Tables -->
-    <div id="monthlyHistoryContainer"></div>
+    <!-- Container for Complete Monthly Automation Output -->
+    <div id="monthlyAutomationContainer"></div>
 
   </div>
 
