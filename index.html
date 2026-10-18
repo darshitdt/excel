@@ -12,8 +12,6 @@
     :root {
       --primary-color: #107c41; /* Excel Green */
       --primary-hover: #0b582e;
-      --secondary-color: #005a9e; /* Macro Accent Blue */
-      --secondary-hover: #004578;
       --history-color: #8e24aa; /* Monthly Automation Purple */
       --history-hover: #6a1b9a;
       --bg-color: #f3f2f1;
@@ -112,9 +110,6 @@
     .btn-primary { background-color: var(--primary-color); color: white; }
     .btn-primary:hover { background-color: var(--primary-hover); }
 
-    .btn-macro2 { background-color: var(--secondary-color); color: white; }
-    .btn-macro2:hover { background-color: var(--secondary-hover); }
-
     .btn-history { background-color: var(--history-color); color: white; }
     .btn-history:hover { background-color: var(--history-hover); }
 
@@ -160,8 +155,6 @@
     }
 
     .summary-row-total { background-color: #dce6f1; font-weight: bold; }
-    .summary-row-maxmin { background-color: #f2f2f2; font-weight: bold; }
-    .summary-row-diff { background-color: #fee6e6; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -187,8 +180,7 @@
       </div>
 
       <div class="button-group">
-        <button class="btn btn-primary" onclick="runMacroLogic()">▶ Run Main Macro</button>
-        <button class="btn btn-macro2" onclick="runSecondMacroLogic()">▶ Run Macro 2</button>
+        <button class="btn btn-primary" onclick="runMacroLogic()">▶ Run Main Telemetry Dashboard</button>
         <button class="btn btn-history" onclick="generateBorewellReportFinal()">⚡ Generate Complete Monthly Automation</button>
         <button class="btn btn-secondary" onclick="clearCredentials()">🗑 Clear Saved Info</button>
       </div>
@@ -196,7 +188,7 @@
       <p id="statusMsg"></p>
     </div>
 
-    <!-- Table 1: Main Macro Report -->
+    <!-- Main Page Telemetry Table -->
     <div class="card" style="overflow-x: auto;">
       <div class="table-header-container">
         <h3>Main Page Telemetry Report</h3>
@@ -217,30 +209,7 @@
         </thead>
         <tbody id="tableBodyMain">
           <tr>
-            <td colspan="8" style="text-align:center;">No data loaded yet. Enter credentials and click 'Run Main Macro'.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Table 2: Macro 2 Report -->
-    <div class="card" style="overflow-x: auto;">
-      <div class="table-header-container">
-        <h3>Macro 2 Telemetry Report</h3>
-        <button class="btn btn-success" style="background-color: #005a9e;" onclick="exportToExcel('excelTableMacro2', 'Borewell_Macro2_Report.xlsx', 'Macro 2')">📥 Export Macro 2 Report</button>
-      </div>
-      <table id="excelTableMacro2">
-        <thead>
-          <tr>
-            <th>Site Name</th>
-            <th>Location</th>
-            <th>Flow</th>
-            <th>Totalizer</th>
-          </tr>
-        </thead>
-        <tbody id="tableBodyMacro2">
-          <tr>
-            <td colspan="4" style="text-align:center;">No data loaded yet. Enter credentials and click 'Run Macro 2'.</td>
+            <td colspan="8" style="text-align:center;">No data loaded yet. Enter credentials and click 'Run Main Telemetry Dashboard'.</td>
           </tr>
         </tbody>
       </table>
