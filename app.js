@@ -25,9 +25,6 @@ function clearCredentials() {
   showStatus("Saved credentials cleared!");
 }
 
-/**
- * Common Login Authentication Helper
- */
 async function authenticateUser(userInput, passInput) {
   const loginResponse = await fetch(PROXY_URL + "/api/auth/login", {
     method: "POST",
@@ -48,7 +45,7 @@ async function authenticateUser(userInput, passInput) {
 }
 
 /**
- * 1. Main Entry Point: GenerateBorewellReportFinal
+ * MAIN ENTRY POINT: GenerateBorewellReportFinal
  */
 async function generateBorewellReportFinal() {
   const userInput = document.getElementById("apiUser").value.trim();
@@ -94,19 +91,19 @@ async function generateBorewellReportFinal() {
     }
 
     const container = document.getElementById("monthlyAutomationContainer");
-    container.innerHTML = ""; // Reset output view
+    container.innerHTML = "";
 
     const masterWorkbook = XLSX.utils.book_new();
 
-    // Run Report 1: Monthly Transposed Summary
+    // 1. Run Monthly Transposed Summary
     showStatus("Running Report 1: Monthly Transposed Summary...");
     await runMonthlyBorewellTransposed(token, bwList, targetYear, targetMonth, container, masterWorkbook);
 
-    // Run Report 2: Detailed Monthly Timeseries Per Borewell
+    // 2. Run All Borewells Detailed Log
     showStatus("Running Report 2: Per-Borewell Detailed Log...");
     await runAllBorewellsDetailed(token, bwList, targetYear, targetMonth, container, masterWorkbook);
 
-    // Master Download Button
+    // Add Master Download Button
     const downloadCard = document.createElement("div");
     downloadCard.className = "card";
     downloadCard.style.textAlign = "center";
@@ -126,9 +123,6 @@ async function generateBorewellReportFinal() {
   }
 }
 
-/**
- * Helper: Parse Month / Year String
- */
 function parseMonthYear(inputStr) {
   inputStr = inputStr.trim();
   let year = 0, month = 0;
@@ -149,9 +143,6 @@ function parseMonthYear(inputStr) {
   return { valid, year, month };
 }
 
-/**
- * Fetch & Sort Borewell Entities
- */
 async function fetchBorewellList(token) {
   const entitiesPayload = {
     entityFields: [
@@ -200,125 +191,191 @@ async function fetchBorewellList(token) {
 }
 
 /**
- * Report 1: Transposed Summary Matrix
+ * Report 1: RunMonthlyBorewellTransposedWithParams Exact Port
  */
 async function runMonthlyBorewellTransposed(token, bwList, targetYear, targetMonth, container, masterWorkbook) {
+  // Days in target month (1 to 28/30/31)
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-  const monthNameStr = new Date(targetYear, targetMonth - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-  const maxAllowedDate = new Date();
+  
+  // Format sheet name: mmmm-yyyy (e.g. September-2026)
+  const monthDateObj = new Date(targetYear, targetMonth - 1, 1);
+  const summarySheetName = monthDateObj.toLocaleString('default', { month: 'long' }) + "-" + targetYear;
 
-  // Matrix structure
+  const now = new Date();
+  const todayZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
   const dates = [];
   const matrixData = []; // daysInMonth x bwList.length
 
   for (let d = 1; d <= daysInMonth; d++) {
     const currDate = new Date(targetYear, targetMonth - 1, d);
-    dates.push(currDate.toISOString().substring(0, 10));
+    const dateStr = `${currDate.getFullYear()}-${String(currDate.getMonth() + 1).padStart(2, '0')}-${String(currDate.getDate()).padStart(2, '0')}`;
+    dates.push(dateStr);
     matrixData.push(new Array(bwList.length).fill("-"));
   }
 
-  // Fetch daily totalizer per borewell
+  // Fetch telemetry per device per day exact to VBA epoch loop
   for (let i = 0; i < bwList.length; i++) {
     const dev = bwList[i];
-    showStatus(`Report 1: Fetching daily totals for ${dev.cleanName} (${i + 1}/${bwList.length})...`);
+    showStatus(`Report 1: Fetching telemetry for ${dev.cleanName} (${i + 1}/${bwList.length})...`);
 
     for (let d = 1; d <= daysInMonth; d++) {
       const currDate = new Date(targetYear, targetMonth - 1, d);
-      if (currDate > maxAllowedDate) continue;
+      
+      if (currDate > todayZero) {
+        matrixData[d - 1][i] = "-";
+      } else {
+        // UTC Epoch calculation matching VBA: (currDate - 1970/1/1)*86400 - 19800
+        const dateUtcMs = Date.UTC(targetYear, targetMonth - 1, d, 0, 0, 0);
+        const startEpochSec = Math.floor(dateUtcMs / 1000) - 19800;
+        const startTs = Math.floor(startEpochSec * 1000);
+        const endTs = Math.floor((startEpochSec + 86400) * 1000 - 1);
 
-      const startEpochSec = (Math.floor(Date.UTC(targetYear, targetMonth - 1, d, 0, 0, 0) / 1000)) - 19800;
-      const startTs = Math.floor(startEpochSec * 1000);
-      const endTs = Math.floor((startEpochSec + 86400) * 1000 - 1);
+        const telemetryUrl = `${PROXY_URL}/api/plugins/telemetry/DEVICE/${dev.id}/values/timeseries?keys=Totalizer&startTs=${startTs}&endTs=${endTs}&interval=60000&agg=NONE&limit=5000`;
 
-      const telemetryUrl = `${PROXY_URL}/api/plugins/telemetry/DEVICE/${dev.id}/values/timeseries?keys=Totalizer&startTs=${startTs}&endTs=${endTs}&interval=60000&agg=NONE&limit=5000`;
-
-      try {
-        const resp = await fetch(telemetryUrl, { headers: { "Accept": "application/json", "X-Authorization": `Bearer ${token}` } });
-        if (resp.ok) {
-          const tJson = await resp.json();
-          if (tJson.Totalizer && tJson.Totalizer.length > 0) {
-            const sorted = tJson.Totalizer.slice().sort((a, b) => a.ts - b.ts);
-            const tMin = parseFloat(sorted[0].value);
-            const tMax = parseFloat(sorted[sorted.length - 1].value);
-            if (!isNaN(tMin) && !isNaN(tMax)) {
-              matrixData[d - 1][i] = tMax - tMin;
+        try {
+          const resp = await fetch(telemetryUrl, { headers: { "Accept": "application/json", "X-Authorization": `Bearer ${token}` } });
+          if (resp.ok) {
+            const tJson = await resp.json();
+            if (tJson.Totalizer && tJson.Totalizer.length > 0) {
+              const sorted = tJson.Totalizer.slice().sort((a, b) => a.ts - b.ts);
+              const tMin = parseFloat(sorted[0].value);
+              const tMax = parseFloat(sorted[sorted.length - 1].value);
+              if (!isNaN(tMin) && !isNaN(tMax)) {
+                matrixData[d - 1][i] = tMax - tMin;
+              } else {
+                matrixData[d - 1][i] = 0;
+              }
             } else {
               matrixData[d - 1][i] = 0;
             }
           } else {
-            matrixData[d - 1][i] = 0;
+            matrixData[d - 1][i] = "-";
           }
+        } catch (err) {
+          console.error(err);
+          matrixData[d - 1][i] = "-";
         }
-      } catch (err) {
-        console.error(err);
       }
     }
   }
 
-  // Build UI Table
+  // Build SheetJS AOA Array with Exact Excel Formulas
+  const aoa = [];
+  
+  // Row 1: Headers
+  const headerRow = ["Date"];
+  bwList.forEach(dev => headerRow.push(dev.cleanName));
+  headerRow.push("Total Daily Consumption (m3)");
+  aoa.push(headerRow);
+
+  const devCount = bwList.length;
+
+  // Rows 2 to daysInMonth + 1: Daily Rows
+  for (let d = 0; d < daysInMonth; d++) {
+    const rowNum = d + 2;
+    const currDate = new Date(targetYear, targetMonth - 1, d + 1);
+    const row = [dates[d]];
+
+    for (let i = 0; i < devCount; i++) {
+      row.push(matrixData[d][i]);
+    }
+
+    if (currDate <= todayZero) {
+      const startColLetter = getExcelColumnName(2);
+      const endColLetter = getExcelColumnName(devCount + 1);
+      row.push({ f: `SUM(${startColLetter}${rowNum}:${endColLetter}${rowNum})` });
+    } else {
+      row.push("-");
+    }
+
+    aoa.push(row);
+  }
+
+  const totalRowIndex = daysInMonth + 2;
+  const maxMinRowIndex = daysInMonth + 3;
+  const diffRowIndex = daysInMonth + 4;
+
+  // Row 1: Monthly Total (SUMIF > 0)
+  const sumRow = ["Monthly Total (m3)"];
+  for (let i = 0; i <= devCount; i++) {
+    const colLetter = getExcelColumnName(i + 2);
+    sumRow.push({ f: `SUMIF(${colLetter}2:${colLetter}${daysInMonth + 1}, ">0")` });
+  }
+  aoa.push(sumRow);
+
+  // Row 2: Max - Min Totalizer via INDIRECT
+  const maxMinRow = ["Max - Min Totalizer (m3)"];
+  for (let i = 0; i < devCount; i++) {
+    const colLetter = getExcelColumnName(i + 2);
+    maxMinRow.push({ f: `MAX(INDIRECT("'" & ${colLetter}1 & "'!C:C")) - MIN(INDIRECT("'" & ${colLetter}1 & "'!C:C"))` });
+  }
+  maxMinRow.push("-");
+  aoa.push(maxMinRow);
+
+  // Row 3: Difference (=SUM - (MAX-MIN))
+  const diffRow = ["Difference (m3)"];
+  for (let i = 0; i < devCount; i++) {
+    const colLetter = getExcelColumnName(i + 2);
+    diffRow.push({ f: `=${colLetter}${totalRowIndex}-${colLetter}${maxMinRowIndex}` });
+  }
+  diffRow.push("-");
+  aoa.push(diffRow);
+
+  // Render UI Table View
   const card = document.createElement("div");
   card.className = "card";
   card.style.overflowX = "auto";
 
-  let headerColsHtml = "<th>Date</th>";
-  bwList.forEach(dev => { headerColsHtml += `<th>${dev.cleanName}</th>`; });
-  headerColsHtml += "<th>Total Daily Consumption (m3)</th>";
+  let headerHtml = "<th>Date</th>";
+  bwList.forEach(dev => { headerHtml += `<th>${dev.cleanName}</th>`; });
+  headerHtml += "<th>Total Daily Consumption (m3)</th>";
 
-  let bodyRowsHtml = "";
-  const colTotals = new Array(bwList.length).fill(0);
-
+  let bodyHtml = "";
   for (let d = 0; d < daysInMonth; d++) {
     let rowSum = 0;
-    let rowCellsHtml = `<td>${dates[d]}</td>`;
-
-    for (let i = 0; i < bwList.length; i++) {
+    let rowCells = `<td>${dates[d]}</td>`;
+    for (let i = 0; i < devCount; i++) {
       const val = matrixData[d][i];
       if (typeof val === "number") {
         rowSum += val;
-        colTotals[i] += val;
-        rowCellsHtml += `<td>${formatNumber(val)}</td>`;
+        rowCells += `<td>${formatNumber(val)}</td>`;
       } else {
-        rowCellsHtml += `<td>-</td>`;
+        rowCells += `<td>-</td>`;
       }
     }
-
-    rowCellsHtml += `<td><b>${formatNumber(rowSum)}</b></td>`;
-    bodyRowsHtml += `<tr>${rowCellsHtml}</tr>`;
+    rowCells += `<td><b>${formatNumber(rowSum)}</b></td>`;
+    bodyHtml += `<tr>${rowCells}</tr>`;
   }
-
-  // Summary Rows
-  let sumRowHtml = `<tr class="summary-row-total"><td>Monthly Total (m3)</td>`;
-  let grandTotal = 0;
-  colTotals.forEach(tot => {
-    grandTotal += tot;
-    sumRowHtml += `<td>${formatNumber(tot)}</td>`;
-  });
-  sumRowHtml += `<td>${formatNumber(grandTotal)}</td></tr>`;
 
   card.innerHTML = `
     <div class="table-header-container">
-      <h3>Monthly Summary Transposed (${monthNameStr})</h3>
-      <button class="btn btn-success" onclick="exportToExcel('table_transposed_summary', 'Monthly_Transposed_Summary_${monthNameStr}.xlsx', 'Summary')">📥 Export Summary</button>
+      <h3>Monthly Summary Transposed (${summarySheetName})</h3>
+      <button class="btn btn-success" onclick="exportToExcel('table_transposed_summary', 'Monthly_Transposed_Summary_${summarySheetName}.xlsx', '${summarySheetName}')">📥 Export Summary</button>
     </div>
     <table id="table_transposed_summary">
-      <thead><tr>${headerColsHtml}</tr></thead>
-      <tbody>${bodyRowsHtml}${sumRowHtml}</tbody>
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${bodyHtml}</tbody>
     </table>
   `;
 
   container.appendChild(card);
 
-  // Add to Master Excel
-  const summaryWs = XLSX.utils.table_to_sheet(card.querySelector("#table_transposed_summary"));
-  XLSX.utils.book_append_sheet(masterWorkbook, summaryWs, monthNameStr.substring(0, 31));
+  // Append AOA sheet with formulas to Master Workbook
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  XLSX.utils.book_append_sheet(masterWorkbook, ws, summarySheetName.substring(0, 31));
 }
 
 /**
- * Report 2: Detailed Timeseries Per Borewell
+ * Report 2: AllBorewellsRunByPopupBox555WithParams Exact Port
  */
 async function runAllBorewellsDetailed(token, bwList, targetYear, targetMonth, container, masterWorkbook) {
   const daysInMonth = new Date(targetYear, targetMonth, 0).getDate();
-  const startEpochSec = (Math.floor(Date.UTC(targetYear, targetMonth - 1, 1, 0, 0, 0) / 1000)) - 19800;
+  
+  // Start and End UTC Epoch Timestamps for full target month (IST Offset = 19800)
+  const startDateMs = Date.UTC(targetYear, targetMonth - 1, 1, 0, 0, 0);
+  const startEpochSec = Math.floor(startDateMs / 1000) - 19800;
+  
   const startTs = Math.floor(startEpochSec * 1000);
   const endTs = Math.floor((startEpochSec + (daysInMonth * 86400)) * 1000 - 1);
 
@@ -339,18 +396,37 @@ async function runAllBorewellsDetailed(token, bwList, targetYear, targetMonth, c
       console.error(err);
     }
 
+    // Render HTML Table Card
     renderMonthlyTableCard(container, dev.cleanName, dev.name, parsedRows);
 
-    // Add worksheet to master workbook
+    // Build SheetJS AOA Array with exact Column E formulas
     const wsData = [["Timestamp", "Flow (m3/hr)", "Totalizer (m3)", "Power", "Day Start Diff (m3)"]];
-    let totalDiffSum = 0;
+    const lastDataRow = parsedRows.length + 1;
 
-    parsedRows.forEach(r => {
-      wsData.push([r.timestamp, r.flow, r.totalizer, r.power, r.diff]);
-      if (typeof r.diff === "number") totalDiffSum += r.diff;
+    parsedRows.forEach((r, idx) => {
+      const rowNum = idx + 2;
+      let diffFormulaCell = "";
+
+      if (rowNum === 2) {
+        diffFormulaCell = "-";
+      } else if (rowNum % 2 === 0) {
+        diffFormulaCell = { f: `IF(AND(ISNUMBER(C${rowNum}), ISNUMBER(C${rowNum - 1})), C${rowNum} - C${rowNum - 1}, "-")` };
+      } else {
+        diffFormulaCell = "";
+      }
+
+      wsData.push([r.timestamp, r.flow, r.totalizer, r.power, diffFormulaCell]);
     });
 
-    wsData.push(["Total Difference (m3)", "", "", "", totalDiffSum]);
+    // Summary Total Row at the bottom
+    const totalRowIndex = lastDataRow + 1;
+    wsData.push([
+      "Total Difference (m3)",
+      "",
+      "",
+      "",
+      { f: `SUM(E2:E${lastDataRow})` }
+    ]);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(masterWorkbook, ws, dev.cleanName);
@@ -358,7 +434,7 @@ async function runAllBorewellsDetailed(token, bwList, targetYear, targetMonth, c
 }
 
 /**
- * Filter timeseries data: First and Last record per day + Day Start Diff Calculation
+ * Filter timeseries data: First and Last record per day (IST Timezone)
  */
 function parseTimeseriesFirstLastPerDay(tsData) {
   const map = {};
@@ -382,7 +458,7 @@ function parseTimeseriesFirstLastPerDay(tsData) {
   allRows.sort((a, b) => a.ts - b.ts);
 
   const dailyMap = {};
-  const TZ_OFFSET_MS = 19800 * 1000;
+  const TZ_OFFSET_MS = 19800 * 1000; // IST Offset (+05:30)
 
   allRows.forEach(r => {
     const d = new Date(r.ts + TZ_OFFSET_MS);
@@ -442,6 +518,16 @@ function cleanBWSheetName(rawName) {
   return rawName.replace(":", "").substring(0, 31);
 }
 
+function getExcelColumnName(colIndex) {
+  let colName = "";
+  while (colIndex > 0) {
+    let mod = (colIndex - 1) % 26;
+    colName = String.fromCharCode(65 + mod) + colName;
+    colIndex = Math.floor((colIndex - mod) / 26);
+  }
+  return colName;
+}
+
 function renderMonthlyTableCard(container, sheetName, devName, rows) {
   const card = document.createElement("div");
   card.className = "card";
@@ -468,7 +554,6 @@ function renderMonthlyTableCard(container, sheetName, devName, rows) {
       `;
     });
 
-    // Summary Total Row
     rowsHtml += `
       <tr class="summary-row-total">
         <td colspan="4">Total Difference (m3)</td>
@@ -500,7 +585,7 @@ function renderMonthlyTableCard(container, sheetName, devName, rows) {
 }
 
 /**
- * 2. Main Macro Logic
+ * Main Macro Logic
  */
 async function runMacroLogic() {
   const userInput = document.getElementById("apiUser").value.trim();
@@ -568,7 +653,7 @@ async function runMacroLogic() {
 }
 
 /**
- * 3. Macro 2 Logic
+ * Macro 2 Logic
  */
 async function runSecondMacroLogic() {
   const userInput = document.getElementById("apiUser").value.trim();
@@ -628,9 +713,6 @@ async function runSecondMacroLogic() {
   }
 }
 
-/**
- * Render Table 1: Main Page Report
- */
 function renderMainPageTable(jsonData) {
   const tableBody = document.getElementById("tableBodyMain");
   tableBody.innerHTML = "";
@@ -703,9 +785,6 @@ function renderMainPageTable(jsonData) {
   tableBody.appendChild(totalRow);
 }
 
-/**
- * Render Table 2: Macro 2 Report
- */
 function renderMacro2Table(jsonData) {
   const tableBody = document.getElementById("tableBodyMacro2");
   tableBody.innerHTML = "";
@@ -760,9 +839,6 @@ function formatNumber(num) {
   return Number(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/**
- * Dynamic Excel Export for Any Table ID
- */
 function exportToExcel(tableId, filename, sheetName) {
   const table = document.getElementById(tableId);
   const wb = XLSX.utils.table_to_book(table, { sheet: sheetName || "Report" });
